@@ -20,6 +20,7 @@
 #include "TGNumberEntry.h"
 #include "TGComboBox.h"
 #include "TVirtualPadEditor.h"
+#include "TGaxis.h"
 
 using namespace std;
 
@@ -54,13 +55,14 @@ class InputDialog : public TGMainFrame {
     virtual void CloseWindow();
     virtual Bool_t ProcessMessage(Long_t msg, Long_t parm1, Long_t);
 
-    void AddEntry();
-    void ClearEntries();
-    void SampleEntries();
-    void SetupHist();
-    void DrawExpectedLine();
-    void UpdateCanvas();
-    int  GetValue();
+    void   AddEntry();
+    void   ClearEntries();
+    void   SampleEntries();
+    void   SetupHist();
+    void   DrawExpectedLine();
+    void   UpdateCanvas();
+    int    GetValue();
+    double GetMax();
 };
 
 void InputDialog::SetupHist(){
@@ -75,7 +77,7 @@ void InputDialog::SetupHist(){
   fH->SetBarOffset(0.05);
   fH->GetXaxis()->SetTitle("Dice value");
   fH->GetYaxis()->SetTitle("Number of times");
-  fH->GetYaxis()->SetTitleOffset(1.4);
+  fH->GetYaxis()->SetTitleOffset(1.5);
   fH->SetStats(0);
 
   expLine = new TLine();
@@ -165,12 +167,36 @@ InputDialog::InputDialog(const TGWindow *p, UInt_t w, UInt_t h):
   UpdateCanvas();
 }
 
+double InputDialog::GetMax(){
+  double max = 0;
+  for (int bin=1; bin<=fH->GetNbinsX(); bin++){
+    max = TMath::Max(max, fH->GetBinContent(bin) );
+  }
+  return max;
+}
+
 void InputDialog::UpdateCanvas(){
 
-  TCanvas *canv = fEmbCanv->GetCanvas();
-  if (fixScale && fScUp>fScDn) {
-    fH->GetYaxis()->SetRangeUser(fScDn,fScUp);
+  double expVal = fH->GetEntries()/6.;
+  double upperVal = expVal + 3.*TMath::Sqrt(expVal); // up to + 3sigma
+
+  double max = GetMax();
+
+  if ( max > upperVal ) {
+    upperVal = max * 1.1;
   }
+
+  TCanvas *canv = fEmbCanv->GetCanvas();
+  fH->GetYaxis()->SetRangeUser(0,upperVal);
+
+  TGaxis *yaxis = (TGaxis*)fH->GetYaxis();
+  if ( upperVal > 10000 ) {
+    yaxis->SetMaxDigits(2);
+  }
+
+  //if (fixScale && fScUp>fScDn) {
+    //fH->GetYaxis()->SetRangeUser(fScDn,fScUp);
+  //}
   fH->SetTitle(Form("Dice Values (after %d throws)",int(fH->GetEntries())));
   fH->Draw("HIST");
   DrawExpectedLine();
@@ -191,9 +217,11 @@ void InputDialog::ClearEntries(){
 }
 
 int InputDialog::GetValue(){
-  int val = gRandom->Integer(6);
+  TRandom3 rand;
+  rand.SetSeed(0);
+  int val = rand.Integer(6);
   if (riggedValue>=1 && riggedValue<=6) {
-    int riggingProb = gRandom->Integer(6);
+    int riggingProb = rand.Integer(6);
     if (riggingProb==1) {
       return riggedValue-1;
     }
